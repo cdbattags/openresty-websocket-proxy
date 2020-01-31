@@ -1,7 +1,7 @@
 class WebSocketTestService {
     constructor() {
         this.channel = 'websocket_test_channel';
-        this.webSocketURL = 'ws://0.0.0.0:9300/websocket-test';
+        this.webSocketURL = 'wss://localhost:8443/websocket-test';
     }
 
     /**
@@ -28,10 +28,13 @@ class WebSocketTestService {
                 reject('Websocket test failed!', e);
             };
 
-            setTimeout(() => {
-                websocket.close();
-                reject('No response received after 10 seconds. Websocket test failed!');
-            }, 10000);
+            setTimeout(
+                () => {
+                    websocket.close();
+                    reject('No response received after 10 seconds. Websocket test failed!');
+                },
+                10000
+            );
         });
     }
 }

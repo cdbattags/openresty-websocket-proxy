@@ -1,0 +1,85 @@
+worker_processes  1;
+
+error_log  /var/log/nginx/amp-projections.error.log debug;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    lua_need_request_body on;
+
+    log_format amplify '$remote_addr [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" $request_time $upstream_response_time "$http_x_forwarded_for" "$ssl_server_name" "$ssl_session_id" "$ssl_session_reused" $http_x_api_client $http_x_amplify_serial';
+
+    # log_format log_req_resp '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" $request_time req_header:"$req_header" req_body:"$request_body" resp_header:"$resp_header" resp_body:"$resp_body"';
+
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+    }
+ 
+    upstream websocket {
+        server 127.0.0.1:9300;
+    }
+
+    server {
+        listen 80;
+        access_log /var/log/nginx/amp-projections.http.access.log amplify;
+
+        location / {
+            return 301 https://$host$request_uri;
+        }
+
+        location /ws/ {
+            proxy_pass http://websocket/ws/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_ssl_server_name on;
+            proxy_ssl_name "127.0.0.1";
+        }
+    }
+ 
+    server {
+        listen 443 default_server ssl;
+        access_log /var/log/nginx/amp-projections.https.access.log amplify;
+
+        ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;
+        ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;
+
+        location / {
+            proxy_pass http://websocket;
+        }
+        
+        location /ws/ {
+            # set $resp_body "";
+            # body_filter_by_lua '
+            # local resp_body = string.sub(ngx.arg[1], 1, 1000)
+            # ngx.ctx.buffered = (ngx.ctx.buffered or "") .. resp_body
+            # if ngx.arg[2] then
+            #     ngx.var.resp_body = ngx.ctx.buffered
+            # end
+            # ';
+
+            # set $req_header "";
+            # set $resp_header "";
+            # header_filter_by_lua ' 
+            # local h = ngx.req.get_headers()
+            # for k, v in pairs(h) do
+            #     ngx.var.req_header = ngx.var.req_header .. k.."="..v.." "
+            # end
+            # local rh = ngx.resp.get_headers()
+            # for k, v in pairs(rh) do
+            #     ngx.var.resp_header = ngx.var.resp_header .. k.."="..v.." "
+            # end
+            # ';
+
+            proxy_pass http://websocket/ws/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_ssl_server_name on;
+            proxy_ssl_name "127.0.0.1";
+        }
+    }
+}
